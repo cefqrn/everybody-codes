@@ -3,12 +3,8 @@ use std::iter::repeat_n;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum DNASymbol {
-    A, T, C, G
-}
-
-type DnaIdentifier = Box<[DNASymbol]>;
+type DnaSymbol = u32;
+type DnaIdentifier = Box<[DnaSymbol]>;
 
 struct Dsu {
     reps:  Box<[usize]>,
@@ -55,12 +51,12 @@ impl Dsu {
     }
 }
 
-fn parse_dna(dna: &str) -> Box<[DNASymbol]> {
+fn parse_dna(dna: &str) -> Box<[DnaSymbol]> {
     dna.chars().map(|c| match c {
-        'A' => DNASymbol::A,
-        'T' => DNASymbol::T,
-        'C' => DNASymbol::C,
-        'G' => DNASymbol::G,
+        'A' => 0,
+        'T' => 1,
+        'C' => 2,
+        'G' => 3,
         _ => { panic!("invalid dna identifier") }
     }).collect()
 }
