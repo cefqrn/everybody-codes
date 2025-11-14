@@ -3,6 +3,8 @@ use std::iter::repeat_n;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
+use rayon::prelude::*;
+
 type DnaSymbol = u32;
 type DnaIdentifier = Box<[DnaSymbol]>;
 
@@ -31,11 +33,11 @@ impl Dsu {
         i
     }
 
-    fn merge(&mut self, i: usize, j: usize) -> bool {
+    fn merge(&mut self, i: usize, j: usize) -> () {
         let mut i = self.find(i);
         let mut j = self.find(j);
         if i == j {
-            return false;
+            return;
         }
 
         if self.ranks[j] > self.ranks[i] {
@@ -46,8 +48,6 @@ impl Dsu {
         if self.ranks[i] == self.ranks[j] {
             self.ranks[i] += 1;
         }
-
-        true
     }
 }
 
@@ -81,29 +81,36 @@ fn main() {
     let duck_count = ducks.len();
 
     let mut families = Dsu::new(duck_count);
-    for (scale_i, child_dna) in &ducks {
-        let mut possible_parents: Box<[(usize, &usize, &DnaIdentifier)]> = ducks.iter()
-            .map(|(scale_number, dna)| (similarity(child_dna, dna), scale_number, dna))
-            .collect();
-        possible_parents.sort_by(|a, b| a.0.cmp(&b.0));
+    ducks.par_iter()
+        .flat_map(|(scale_i, child_dna)| {
+            let mut possible_parents: Box<[(usize, &usize, &DnaIdentifier)]> = ducks.iter()
+                .map(|(scale_number, dna)| (similarity(child_dna, dna), scale_number, dna))
+                .collect();
+            possible_parents.sort_by(|a, b| a.0.cmp(&b.0));
 
-        for (similarity_a, scale_j, dna_a) in &possible_parents {
-            for (similarity_b, scale_k, dna_b) in possible_parents.iter().rev() {
-                if similarity_a + similarity_b < dna_size {
-                    break;
-                }
+            let mut result: Vec<(usize, usize)> = Vec::new();
+            for (similarity_a, scale_j, dna_a) in &possible_parents {
+                for (similarity_b, scale_k, dna_b) in possible_parents.iter().rev() {
+                    if similarity_a + similarity_b < dna_size {
+                        break;
+                    }
 
-                if scale_i == *scale_j || scale_i == *scale_k || scale_j == scale_k {
-                    continue;
-                }
+                    if scale_i == *scale_j || scale_i == *scale_k || scale_j == scale_k {
+                        continue;
+                    }
 
-                if child_dna.iter().zip(*dna_a).zip(*dna_b).all(|((c, a), b)| c == a || c == b) {
-                    families.merge(scale_i-1, *scale_j-1);
-                    families.merge(scale_i-1, *scale_k-1);
+                    if child_dna.iter().zip(*dna_a).zip(*dna_b).all(|((c, a), b)| c == a || c == b) {
+                        result.push((scale_i-1, *scale_j-1));
+                        result.push((scale_i-1, *scale_k-1));
+                    }
                 }
             }
-        }
-    }
+
+            result })
+        .collect_vec_list()
+        .into_iter()
+        .flatten()
+        .for_each(|(i, j)| families.merge(i, j));
 
     let mut scale_sums: BTreeMap<usize, (usize, usize)> = BTreeMap::new();
     for i in 0..duck_count {
@@ -116,5 +123,5 @@ fn main() {
 
     let elapsed = now.elapsed();
 
-    println!("found {result:?} in {elapsed:?}");
+    println!("found {result} in {elapsed:?}");
 }
